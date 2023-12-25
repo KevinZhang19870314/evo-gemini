@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { pipeline } from "stream/promises"; // Node.js streams
-import { ReadableStream } from 'web-streams-polyfill/ponyfill';
+import { ReadableStream, ReadableStreamDefaultReader } from 'web-streams-polyfill/ponyfill';
 
 const pickHeaders = (headers: Headers, keys: (string | RegExp)[]): Headers => {
   const picked = new Headers();
@@ -42,13 +42,20 @@ export default async function handleRequest(request: NextRequest & { nextUrl?: U
   // Check if request.body is not null before using it
   const requestBodyStream = request.body
     ? new ReadableStream({
-        async pull(controller) {
-          const chunk = await request.body!.read();
-          if (chunk.done) {
-            controller.close();
-          } else {
-            controller.enqueue(chunk.value);
+        async start(controller) {
+          const reader = request.body!.getReader();
+
+          async function read() {
+            const { done, value } = await reader.read();
+            if (done) {
+              controller.close();
+            } else {
+              controller.enqueue(value);
+              read();
+            }
           }
+
+          read();
         },
         async cancel(reason) {
           console.error("Request body stream canceled:", reason);
@@ -65,13 +72,20 @@ export default async function handleRequest(request: NextRequest & { nextUrl?: U
   // Check if response.body is not null before using it
   const responseBodyStream = response.body
     ? new ReadableStream({
-        async pull(controller) {
-          const chunk = await response.body!.getReader().read();
-          if (chunk.done) {
-            controller.close();
-          } else {
-            controller.enqueue(chunk.value);
+        async start(controller) {
+          const reader = response.body!.getReader();
+
+          async function read() {
+            const { done, value } = await reader.read();
+            if (done) {
+              controller.close();
+            } else {
+              controller.enqueue(value);
+              read();
+            }
           }
+
+          read();
         },
         async cancel(reason) {
           console.error("Response body stream canceled:", reason);
