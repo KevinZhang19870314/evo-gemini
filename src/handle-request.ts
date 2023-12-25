@@ -100,8 +100,7 @@ export default async function handleRequest(request: NextRequest & { nextUrl?: U
 
   // Pipe the response body stream to the original response object if not null
   if (responseBodyStream) {
-    const writer = response.body!.getWritable();
-    responseBodyStream.pipeTo(writer);
+    responseBodyStream.pipeTo(response.body!.getWriter());
   }
 
   return new Response(null, {
