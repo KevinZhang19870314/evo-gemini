@@ -15,6 +15,7 @@
   "dependencies": {
     "next": "canary",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "web-streams-polyfill": "latest"
   }
 }
