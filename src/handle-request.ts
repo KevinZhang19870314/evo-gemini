@@ -39,20 +39,22 @@ export default async function handleRequest(request: NextRequest & { nextUrl?: U
 
   const headers = pickHeaders(request.headers, ["content-type", "x-goog-api-client", "x-goog-api-key"]);
 
-  // Create a readable stream from the request body
-  const requestBodyStream = new ReadableStream({
-    async pull(controller) {
-      const chunk = await request.body.read();
-      if (chunk.done) {
-        controller.close();
-      } else {
-        controller.enqueue(chunk.value);
-      }
-    },
-    async cancel(reason) {
-      console.error("Request body stream canceled:", reason);
-    },
-  });
+  // Check if request.body is not null before using it
+  const requestBodyStream = request.body
+    ? new ReadableStream({
+        async pull(controller) {
+          const chunk = await request.body!.read();
+          if (chunk.done) {
+            controller.close();
+          } else {
+            controller.enqueue(chunk.value);
+          }
+        },
+        async cancel(reason) {
+          console.error("Request body stream canceled:", reason);
+        },
+      })
+    : null;
 
   const response = await fetch(url, {
     body: requestBodyStream,
@@ -60,28 +62,32 @@ export default async function handleRequest(request: NextRequest & { nextUrl?: U
     headers,
   });
 
-  // Create a writable stream for the response body
-  const responseBodyStream = new ReadableStream({
-    async pull(controller) {
-      const chunk = await response.body!.getReader().read();
-      if (chunk.done) {
-        controller.close();
-      } else {
-        controller.enqueue(chunk.value);
-      }
-    },
-    async cancel(reason) {
-      console.error("Response body stream canceled:", reason);
-    },
-  });
+  // Check if response.body is not null before using it
+  const responseBodyStream = response.body
+    ? new ReadableStream({
+        async pull(controller) {
+          const chunk = await response.body!.getReader().read();
+          if (chunk.done) {
+            controller.close();
+          } else {
+            controller.enqueue(chunk.value);
+          }
+        },
+        async cancel(reason) {
+          console.error("Response body stream canceled:", reason);
+        },
+      })
+    : null;
 
   const responseHeaders = {
     ...CORS_HEADERS,
     ...Object.fromEntries(response.headers),
   };
 
-  // Pipe the response body stream to the original response object
-  await pipeline(responseBodyStream.pipeTo(new WritableStream()), response.body!.getReader());
+  // Pipe the response body stream to the original response object if not null
+  if (responseBodyStream) {
+    await pipeline(responseBodyStream.pipeTo(new WritableStream()), response.body!.getReader());
+  }
 
   return new Response(null, {
     headers: responseHeaders,
